@@ -21,16 +21,20 @@ public class GrabAndThrowOnline : NetworkBehaviour
 
     private void Start()
     {
-
-
         rb = GetComponent<Rigidbody>();
         startPosition = transform.position;
     }
 
     private void OnMouseDown()
     {
-        if (!isDraggingOnline.Value)
+        Vector3 cursorWorldPoint = Camera.main.ScreenToWorldPoint(new Vector3(Input.mousePosition.x, Input.mousePosition.y, -Camera.main.transform.position.z));
+
+        if (!isDraggingOnline.Value && cursorWorldPoint.x > -10)
         {
+            //set owner
+            // NetworkObject networkObject = GetComponent<NetworkObject>();
+            // networkObject.ChangeOwnership(NetworkManager.Singleton.LocalClientId);
+
             Debug.Log("OnMouseDownAndCanDrag");
             isCurrentClientDragging = true;
             PlayerGrabServerRpc();
@@ -95,6 +99,12 @@ public class GrabAndThrowOnline : NetworkBehaviour
         if (isCurrentClientDragging)
         {
             Vector3 cursorWorldPoint = Camera.main.ScreenToWorldPoint(new Vector3(Input.mousePosition.x, Input.mousePosition.y, -Camera.main.transform.position.z));
+
+            if (cursorWorldPoint.x < 0)
+            {
+                cursorWorldPoint.x = 0;
+            }
+
             SubmitPositionServerRpc(cursorWorldPoint);
         }
     }

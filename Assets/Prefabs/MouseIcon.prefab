@@ -12,7 +12,7 @@ GameObject:
   - component: {fileID: 6986320524498514185}
   - component: {fileID: 4586501123027377806}
   - component: {fileID: 6116365018710444920}
-  - component: {fileID: 7059866849994302221}
+  - component: {fileID: -6107097895855927431}
   m_Layer: 0
   m_Name: MouseIcon
   m_TagString: Untagged
@@ -119,9 +119,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a72b63d4cbb9e6b4197b030f566660c4, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  Position:
-    m_InternalValue: {x: 0, y: 0, z: 0}
---- !u!114 &7059866849994302221
+--- !u!114 &-6107097895855927431
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -130,7 +128,7 @@ MonoBehaviour:
   m_GameObject: {fileID: 7970217001000847591}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: e96cb6065543e43c4a752faaa1468eb1, type: 3}
+  m_Script: {fileID: 11500000, guid: a69b5170bb14304449bc9d50624b0022, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   SyncPositionX: 1
@@ -139,9 +137,9 @@ MonoBehaviour:
   SyncRotAngleX: 1
   SyncRotAngleY: 1
   SyncRotAngleZ: 1
-  SyncScaleX: 1
-  SyncScaleY: 1
-  SyncScaleZ: 1
+  SyncScaleX: 0
+  SyncScaleY: 0
+  SyncScaleZ: 0
   PositionThreshold: 0.001
   RotAngleThreshold: 0.01
   ScaleThreshold: 0.01
