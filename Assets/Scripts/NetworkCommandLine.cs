@@ -1,8 +1,6 @@
 using System.Collections.Generic;
 using Unity.Netcode;
 using Unity.Netcode.Transports.UTP;
-using Unity.Networking.Transport;
-using Unity.Networking.Transport.TLS;
 using UnityEngine;
 
 public class NetworkCommandLine : MonoBehaviour

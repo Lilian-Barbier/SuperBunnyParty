@@ -6,6 +6,9 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
-    path: Assets/Scenes/MouseMovement.unity
+    path: Assets/Scenes/Games/BunnyVolleyBall.unity
+    guid: 37f4d6c962b33374b94dea2ba0f448f6
+  - enabled: 1
+    path: Assets/Scenes/Games/BasketBall.unity
     guid: 90fe4b0be75b7764a8a30fab158415df
   m_configObjects: {}

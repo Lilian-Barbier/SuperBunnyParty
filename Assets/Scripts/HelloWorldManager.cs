@@ -1,7 +1,5 @@
 using Unity.Netcode;
 using Unity.Netcode.Transports.UTP;
-using Unity.Networking.Transport;
-using Unity.Networking.Transport.TLS;
 using UnityEngine;
 
 
@@ -28,8 +26,16 @@ public class HelloWorldManager : MonoBehaviour
     static void StartButtons()
     {
         // if (GUILayout.Button("Host")) NetworkManager.Singleton.StartHost();
-        if (GUILayout.Button("Client"))
+        if (GUILayout.Button("Client Right"))
         {
+            PlayerPrefs.SetString("position", "right");
+            var transport = NetworkManager.Singleton.GetComponent<UnityTransport>();
+            transport.SetClientSecrets(SecureParameters.ServerCommonName, SecureParameters.MyGameClientCA);
+            NetworkManager.Singleton.StartClient();
+        }
+        if (GUILayout.Button("Client Left"))
+        {
+            PlayerPrefs.SetString("position", "left");
             var transport = NetworkManager.Singleton.GetComponent<UnityTransport>();
             transport.SetClientSecrets(SecureParameters.ServerCommonName, SecureParameters.MyGameClientCA);
             NetworkManager.Singleton.StartClient();

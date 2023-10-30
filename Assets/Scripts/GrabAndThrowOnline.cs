@@ -1,11 +1,9 @@
-using System.Collections;
 using System.Collections.Generic;
 using Unity.Netcode;
 using UnityEngine;
 
 public class GrabAndThrowOnline : NetworkBehaviour
 {
-    private Vector3 offset;
 
     private bool isCurrentClientDragging = false;
     private NetworkVariable<bool> isDraggingOnline = new(false);
@@ -26,6 +24,31 @@ public class GrabAndThrowOnline : NetworkBehaviour
         startPosition = transform.position;
     }
 
+    private void Update()
+    {
+        if (isCurrentClientDragging)
+        {
+            Vector3 cursorWorldPoint = Camera.main.ScreenToWorldPoint(new Vector3(Input.mousePosition.x, Input.mousePosition.y, -Camera.main.transform.position.z));
+
+            if (cursorWorldPoint.x < 0)
+            {
+                cursorWorldPoint.x = 0;
+            }
+            transform.position = cursorWorldPoint;
+
+            //todo : ajouter une limite pour n'envoyer un update que tout les 0.2s
+            SubmitPositionServerRpc(cursorWorldPoint);
+
+            // Add the current mouse position to the list
+            mousePositions.Add(cursorWorldPoint);
+
+            // Remove old positions if the list exceeds the maximum count
+            if (mousePositions.Count > maxMousePositions)
+            {
+                mousePositions.RemoveAt(0);
+            }
+        }
+    }
 
     public override void OnNetworkSpawn()
     {
@@ -39,6 +62,9 @@ public class GrabAndThrowOnline : NetworkBehaviour
         base.OnNetworkSpawn();
     }
 
+
+    #region Server
+
     void SynchronizeGameObject()
     {
         if (!isDraggingOnline.Value)
@@ -49,6 +75,59 @@ public class GrabAndThrowOnline : NetworkBehaviour
             SetPositionAndVelocityClientRpc();
         }
     }
+
+    [ServerRpc(RequireOwnership = false)]
+    private void PlayerGrabServerRpc()
+    {
+        isDraggingOnline.Value = true;
+
+        rb.velocity = Vector3.zero;
+        rb.angularVelocity = Vector3.zero;
+
+        // Clear the mousePositions list when dragging starts
+        mousePositions.Clear();
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    private void PlayerThrowServerRpc(Vector3 velocity)
+    {
+        isDraggingOnline.Value = false;
+        rb.velocity = velocity;
+    }
+
+    [ServerRpc(RequireOwnership = false)] //indique que cette méthode est exécutée sur le serveur
+    void SubmitPositionServerRpc(Vector3 cursorWorldPoint, ServerRpcParams serverRpcParams = default)
+    {
+        Position.Value = cursorWorldPoint;
+        Velocity.Value = Vector3.zero;
+
+        // Send the position to all clients except the client who sent the command
+        // (the client who sent the command already knows the position)
+        ulong[] sendToClients = new ulong[NetworkManager.Singleton.ConnectedClientsList.Count - 1];
+        int index = 0;
+        foreach (ulong id in NetworkManager.Singleton.ConnectedClientsIds)
+        {
+            if (id != serverRpcParams.Receive.SenderClientId)
+            {
+                sendToClients[index] = id;
+                index++;
+            }
+        }
+
+        ClientRpcParams clientRpcParams = new ClientRpcParams
+        {
+            Send = new ClientRpcSendParams
+            {
+                TargetClientIds = sendToClients
+            }
+        };
+
+        SynchronizePositionClientRpc(clientRpcParams);
+    }
+    #endregion
+
+
+    #region Client
 
     private void OnMouseDown()
     {
@@ -81,27 +160,28 @@ public class GrabAndThrowOnline : NetworkBehaviour
     [ClientRpc]
     void SetPositionAndVelocityClientRpc()
     {
+        bool doSynchPosition = false;
+
+        //On vérifie si la position et la vélocité de l'objet sont différentes de celle du client avec une zone de tolérance
+        if (Vector3.Distance(transform.position, Position.Value) > 0.3f || Vector3.Distance(rb.velocity, Velocity.Value) > 0.3f)
+        {
+            doSynchPosition = true;
+        }
+
+        //On synchronise la position et la vélocité uniquement si le client actuel n'est pas en train de bouger l'objet 
+        if (!isDraggingOnline.Value && !isCurrentClientDragging && doSynchPosition)
+        {
+            transform.position = Position.Value;
+            rb.velocity = Velocity.Value;
+        }
+    }
+
+    // Méthode appellé pour synchroniser la position et la vélocité de l'objet lorsqu'un joueur bouge l'objet
+    [ClientRpc]
+    void SynchronizePositionClientRpc(ClientRpcParams clientRpcParams = default)
+    {
         transform.position = Position.Value;
         rb.velocity = Velocity.Value;
-    }
-
-    [ServerRpc(RequireOwnership = false)]
-    private void PlayerGrabServerRpc()
-    {
-        isDraggingOnline.Value = true;
-
-        rb.velocity = Vector3.zero;
-        rb.angularVelocity = Vector3.zero;
-
-        // Clear the mousePositions list when dragging starts
-        mousePositions.Clear();
-    }
-
-    [ServerRpc(RequireOwnership = false)]
-    private void PlayerThrowServerRpc(Vector3 velocity)
-    {
-        isDraggingOnline.Value = false;
-        rb.velocity = velocity;
     }
 
     private Vector3 CalculateThrowVelocity()
@@ -127,67 +207,7 @@ public class GrabAndThrowOnline : NetworkBehaviour
     }
 
 
-    private void Update()
-    {
-        if (isCurrentClientDragging)
-        {
-            Vector3 cursorWorldPoint = Camera.main.ScreenToWorldPoint(new Vector3(Input.mousePosition.x, Input.mousePosition.y, -Camera.main.transform.position.z));
+    #endregion
 
-            if (cursorWorldPoint.x < 0)
-            {
-                cursorWorldPoint.x = 0;
-            }
-            transform.position = cursorWorldPoint;
-
-            //todo : ajouter une limite pour n'envoyer un update que tout les 0.2s
-            SubmitPositionServerRpc(cursorWorldPoint);
-
-            // Add the current mouse position to the list
-            mousePositions.Add(cursorWorldPoint);
-
-            // Remove old positions if the list exceeds the maximum count
-            if (mousePositions.Count > maxMousePositions)
-            {
-                mousePositions.RemoveAt(0);
-            }
-        }
-    }
-
-    [ServerRpc(RequireOwnership = false)] //indique que cette méthode est exécutée sur le serveur
-    void SubmitPositionServerRpc(Vector3 cursorWorldPoint, ServerRpcParams serverRpcParams = default)
-    {
-        Position.Value = cursorWorldPoint;
-        Velocity.Value = Vector3.zero;
-
-        // Send the position to all clients except the client who sent the command
-        // (the client who sent the command already knows the position)
-        ulong[] sendToClients = new ulong[NetworkManager.Singleton.ConnectedClientsList.Count - 1];
-        int index = 0;
-        foreach (ulong id in NetworkManager.Singleton.ConnectedClientsIds)
-        {
-            if (id != serverRpcParams.Receive.SenderClientId)
-            {
-                sendToClients[index] = id;
-                index++;
-            }
-        }
-
-        ClientRpcParams clientRpcParams = new ClientRpcParams
-        {
-            Send = new ClientRpcSendParams
-            {
-                TargetClientIds = sendToClients
-            }
-        };
-
-        SynchronizePositionClientRpc(clientRpcParams);
-    }
-
-    [ClientRpc]
-    void SynchronizePositionClientRpc(ClientRpcParams clientRpcParams = default)
-    {
-        transform.position = Position.Value;
-        rb.velocity = Velocity.Value;
-    }
 
 }

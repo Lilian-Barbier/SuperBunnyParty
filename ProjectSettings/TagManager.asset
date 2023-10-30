@@ -6,6 +6,11 @@ TagManager:
   tags:
   - ScoreText
   - TimerText
+  - AreaLeft
+  - AreaRight
+  - ScoreLeftText
+  - ScoreRightText
+  - PhysicObject
   layers:
   - Default
   - TransparentFX
