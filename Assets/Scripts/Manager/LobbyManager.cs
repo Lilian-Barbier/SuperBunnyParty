@@ -143,7 +143,9 @@ public class LobbyManager : MonoBehaviour
 
     public void JoinLobby(TextMeshProUGUI text)
     {
-        JoinLobby(text.text);
+        //get 6 first characters of the text because text mesh pro add invisible characters at the end
+        string lobbyCode = text.text[..6];
+        JoinLobby(lobbyCode);
     }
 
     public async void JoinLobby(string lobbyCode)
@@ -151,8 +153,8 @@ public class LobbyManager : MonoBehaviour
         try
         {
             //get lobbyCode from ui field
-
-            var lobby = await JoinLobbyAsync(lobbyCode, "joueur2");
+            Debug.Log($"Joining lobby {lobbyCode.Trim()}");
+            var lobby = await JoinLobbyAsync(lobbyCode.Trim(), "joueur2");
 
             //LobbyConverters.RemoteToLocal(lobby, m_LocalLobby);
 
