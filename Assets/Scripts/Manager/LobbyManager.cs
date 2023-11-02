@@ -8,6 +8,10 @@ using System.Threading.Tasks;
 using Unity.Services.Lobbies;
 using Unity.Services.Lobbies.Models;
 using TMPro;
+using System.IO;
+using System.Linq;
+
+
 
 
 #if UNITY_EDITOR
@@ -21,6 +25,7 @@ public class LobbyManager : MonoBehaviour
     public Lobby CurrentLobby { get; private set; }
     private Task heartBeatTask;
 
+    private string username;
 
     // Start is called before the first frame update
     void Start()
@@ -133,29 +138,48 @@ public class LobbyManager : MonoBehaviour
         }
     }
 
-    public async void CreateLobby()
+    public void ChangedUsername(string newUsername)
     {
-        CurrentLobby = await CreateLobbyAsync("test", 2, false, "Joueur1", null);
+        username = newUsername;
+    }
+
+    public void CreateLobby()
+    {
+        if (username != null && username.Length > 0)
+        {
+            CreateLobby(username);
+        }
+    }
+
+    public async void CreateLobby(string userName)
+    {
+        //generate random lobby name
+        string lobbyName = Path.GetRandomFileName().Replace(".", "").Substring(0, 4);
+        CurrentLobby = await CreateLobbyAsync(lobbyName, 4, false, userName, null);
         await BindLocalLobbyToRemote(CurrentLobby.Id, new LocalLobby());
         Debug.Log($"Lobby created. Lobby ID {CurrentLobby.Id} lobby code {CurrentLobby.LobbyCode}");
 
     }
 
-    public void JoinLobby(TextMeshProUGUI text)
+    public void JoinLobby(TextMeshProUGUI code)
     {
-        //get 6 first characters of the text because text mesh pro add invisible characters at the end
-        string lobbyCode = text.text[..6];
-        JoinLobby(lobbyCode);
+
+        if (username != null && username.Length > 0 && code.text != null && code.text.Length > 5)
+        {
+            //get 6 first characters of the text because text mesh pro add invisible characters at the end
+            JoinLobby(code.text[..6], username);
+        }
     }
 
-    public async void JoinLobby(string lobbyCode)
+    public async void JoinLobby(string lobbyCode, string username)
     {
         try
         {
             //get lobbyCode from ui field
             Debug.Log($"Joining lobby {lobbyCode.Trim()}");
-            var lobby = await JoinLobbyAsync(lobbyCode.Trim(), "joueur2");
+            CurrentLobby = await JoinLobbyAsync(lobbyCode.Trim(), username);
 
+            await BindLocalLobbyToRemote(CurrentLobby.Id, new LocalLobby());
             //LobbyConverters.RemoteToLocal(lobby, m_LocalLobby);
 
         }
@@ -309,6 +333,7 @@ public class LobbyManager : MonoBehaviour
                 var index = playerChanges.PlayerIndex;
                 var isHost = localLobby.HostID.Value == id;
 
+
                 var newPlayer = new LocalPlayer(id, index, isHost);
 
                 foreach (var dataEntry in joinedPlayer.Data)
@@ -317,7 +342,9 @@ public class LobbyManager : MonoBehaviour
                     //ParseCustomPlayerData(newPlayer, dataEntry.Key, dataObject.Value);
                 }
 
-                Debug.Log($"Player {id} joined the lobby");
+                //debug player username 
+                var displayName = joinedPlayer.Data["DisplayName"].Value;
+                Debug.Log($"Player {index} joined the lobby with username {displayName}");
                 localLobby.AddPlayer(index, newPlayer);
             }
         };
