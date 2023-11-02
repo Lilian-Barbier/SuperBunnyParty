@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using UnityEngine;
 
@@ -93,7 +94,7 @@ public class LocalLobby
 
     public LocalPlayer GetLocalPlayer(int index)
     {
-        return PlayerCount > index ? m_LocalPlayers[index] : null;
+        return PlayerCount > index ? m_LocalPlayers.First(p => p.Index.Value == index) : null;
     }
 
     private void OnHostChanged(string newHostId)
@@ -104,17 +105,17 @@ public class LocalLobby
         }
     }
 
-    public void AddPlayer(int index, LocalPlayer user)
+    public void AddPlayer(LocalPlayer user)
     {
-        m_LocalPlayers.Insert(index, user);
+        m_LocalPlayers.Add(user);
         user.UserStatus.onChanged += OnUserChangedStatus;
         onUserJoined?.Invoke(user);
-        Debug.Log($"Added User: {user.DisplayName.Value} - {user.ID.Value} to slot {index + 1}/{PlayerCount}");
+        Debug.Log($"Added User: {user.DisplayName.Value} - {user.ID.Value} to slot {user.Index?.Value + 1}/{PlayerCount}");
     }
 
     public void RemovePlayer(int playerIndex)
     {
-        m_LocalPlayers[playerIndex].UserStatus.onChanged -= OnUserChangedStatus;
+        m_LocalPlayers.First(p => p.Index.Value == playerIndex).UserStatus.onChanged -= OnUserChangedStatus;
         m_LocalPlayers.RemoveAt(playerIndex);
         onUserLeft?.Invoke(playerIndex);
     }

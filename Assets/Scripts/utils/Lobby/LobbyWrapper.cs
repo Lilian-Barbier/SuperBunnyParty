@@ -1,175 +1,41 @@
-using System;
+
+
 using System.Collections.Generic;
-using System.Text;
-using Unity.Services.Authentication;
-using Unity.Services.Core;
-using UnityEngine;
+using System.IO;
 using System.Threading.Tasks;
+using Unity.Services.Authentication;
 using Unity.Services.Lobbies;
 using Unity.Services.Lobbies.Models;
-using TMPro;
-using System.IO;
-using System.Linq;
+using UnityEngine;
+using UnityEngine.Events;
 
-
-
-
-#if UNITY_EDITOR
-using System.Security.Cryptography;
-#endif
-
-public class LobbyManager : MonoBehaviour
+public class LobbyWrapper : MonoBehaviour
 {
+    private static LobbyWrapper instance;
 
-    LobbyEventCallbacks lobbyEventCallbacks = new LobbyEventCallbacks();
-    public Lobby CurrentLobby { get; private set; }
-    private Task heartBeatTask;
-
-    private string username;
-
-    // Start is called before the first frame update
-    void Start()
+    // Static singleton property
+    public static LobbyWrapper Instance
     {
-        if (string.IsNullOrEmpty(Application.cloudProjectId))
-        {
-            OnSignInFailed();
-            return;
-        }
-
-        TrySignIn();
+        // ajout ET création du composant à un GameObject nommé "SingletonHolder" 
+        get { return instance != null ? instance : (instance = new GameObject("SingletonHolder").AddComponent<LobbyWrapper>()); }
+        private set { instance = value; }
     }
 
-    private async void TrySignIn()
+    void Awake()
     {
-        try
-        {
-            var unityAuthenticationInitOptions = GenerateAuthenticationOptions(GetProfile());
-            await InitializeAndSignInAsync(unityAuthenticationInitOptions);
-            OnAuthSignIn();
-            //m_ProfileManager.onProfileChanged += OnProfileChanged;
-        }
-
-        catch (Exception)
-        {
-            OnSignInFailed();
-        }
-    }
-    private void OnAuthSignIn()
-    {
-
-        Debug.Log($"Signed in. Unity Player ID {AuthenticationService.Instance.PlayerId}");
-
-        //m_LocalUser.ID = AuthenticationService.Instance.PlayerId;
-
-
+        DontDestroyOnLoad(gameObject);//le GameObject qui porte ce script ne sera pas détruit
     }
 
-    private void OnSignInFailed()
+    Lobby lobby;
+    Task heartBeatTask;
+
+    public LocalLobby GetLocalLobby()
     {
-        Debug.Log("Sign in failed");
+        return localLobby;
     }
 
-
-    static string GetProfile()
-    {
-        var arguments = Environment.GetCommandLineArgs();
-        for (int i = 0; i < arguments.Length; i++)
-        {
-            if (arguments[i] == "-AuthProfile")
-            {
-                var profileId = arguments[i + 1];
-                return profileId;
-            }
-        }
-
-#if UNITY_EDITOR
-
-        // When running in the Editor make a unique ID from the Application.dataPath.
-        // This will work for cloning projects manually, or with Virtual Projects.
-        // Since only a single instance of the Editor can be open for a specific
-        // dataPath, uniqueness is ensured.
-        var hashedBytes = new MD5CryptoServiceProvider().ComputeHash(Encoding.UTF8.GetBytes(Application.dataPath));
-        Array.Resize(ref hashedBytes, 16);
-        // Authentication service only allows profile names of maximum 30 characters. We're generating a GUID based
-        // on the project's path. Truncating the first 30 characters of said GUID string suffices for uniqueness.
-        return new Guid(hashedBytes).ToString("N")[..30];
-#else
-            return "";
-#endif
-    }
-
-
-    public InitializationOptions GenerateAuthenticationOptions(string profile)
-    {
-        try
-        {
-            var unityAuthenticationInitOptions = new InitializationOptions();
-            if (profile.Length > 0)
-            {
-                unityAuthenticationInitOptions.SetProfile(profile);
-            }
-
-            return unityAuthenticationInitOptions;
-        }
-        catch (Exception e)
-        {
-            var reason = e.InnerException == null ? e.Message : $"{e.Message} ({e.InnerException.Message})";
-            //m_UnityServiceErrorMessagePublisher.Publish(new UnityServiceErrorMessage("Authentication Error", reason, UnityServiceErrorMessage.Service.Authentication, e));
-            throw;
-        }
-    }
-
-    public async Task InitializeAndSignInAsync(InitializationOptions initializationOptions)
-    {
-        try
-        {
-            await UnityServices.InitializeAsync(initializationOptions);
-
-            if (!AuthenticationService.Instance.IsSignedIn)
-            {
-                await AuthenticationService.Instance.SignInAnonymouslyAsync();
-            }
-        }
-        catch (Exception e)
-        {
-            var reason = e.InnerException == null ? e.Message : $"{e.Message} ({e.InnerException.Message})";
-            //m_UnityServiceErrorMessagePublisher.Publish(new UnityServiceErrorMessage("Authentication Error", reason, UnityServiceErrorMessage.Service.Authentication, e));
-            throw;
-        }
-    }
-
-    public void ChangedUsername(string newUsername)
-    {
-        username = newUsername;
-    }
-
-    public void CreateLobby()
-    {
-        if (username != null && username.Length > 0)
-        {
-            CreateLobby(username);
-        }
-    }
-
-    public async void CreateLobby(string userName)
-    {
-        //generate random lobby name
-        string lobbyName = Path.GetRandomFileName().Replace(".", "").Substring(0, 4);
-        CurrentLobby = await CreateLobbyAsync(lobbyName, 4, false, userName, null);
-        await BindLocalLobbyToRemote(CurrentLobby.Id, new LocalLobby());
-        Debug.Log($"Lobby created. Lobby ID {CurrentLobby.Id} lobby code {CurrentLobby.LobbyCode}");
-
-    }
-
-    public void JoinLobby(TextMeshProUGUI code)
-    {
-
-        if (username != null && username.Length > 0 && code.text != null && code.text.Length > 5)
-        {
-            //get 6 first characters of the text because text mesh pro add invisible characters at the end
-            JoinLobby(code.text[..6], username);
-        }
-    }
+    LocalLobby localLobby = new();
+    LobbyEventCallbacks lobbyEventCallbacks = new();
 
     public async void JoinLobby(string lobbyCode, string username)
     {
@@ -177,9 +43,14 @@ public class LobbyManager : MonoBehaviour
         {
             //get lobbyCode from ui field
             Debug.Log($"Joining lobby {lobbyCode.Trim()}");
-            CurrentLobby = await JoinLobbyAsync(lobbyCode.Trim(), username);
 
-            await BindLocalLobbyToRemote(CurrentLobby.Id, new LocalLobby());
+            string uasId = AuthenticationService.Instance.PlayerId;
+            var playerData = CreateInitialPlayerData(username);
+
+            JoinLobbyByCodeOptions joinOptions = new() { Player = new Player(id: uasId, data: playerData) };
+            lobby = await LobbyService.Instance.JoinLobbyByCodeAsync(lobbyCode, joinOptions);
+
+            await SubscribeToLobbyEvent();
             //LobbyConverters.RemoteToLocal(lobby, m_LocalLobby);
 
         }
@@ -189,60 +60,7 @@ public class LobbyManager : MonoBehaviour
         }
     }
 
-    public async Task<Lobby> JoinLobbyAsync(string lobbyCode, string userName)
-    {
-        string uasId = AuthenticationService.Instance.PlayerId;
-        var playerData = CreateInitialPlayerData(userName);
-
-        JoinLobbyByCodeOptions joinOptions = new() { Player = new Player(id: uasId, data: playerData) };
-        var joinedLobby = await LobbyService.Instance.JoinLobbyByCodeAsync(lobbyCode, joinOptions);
-
-        return joinedLobby;
-    }
-
-    public async Task<Lobby> CreateLobbyAsync(string lobbyName, int maxPlayers, bool isPrivate, string userName, string password)
-    {
-        string uasId = AuthenticationService.Instance.PlayerId;
-
-        CreateLobbyOptions createOptions = new CreateLobbyOptions
-        {
-            IsPrivate = isPrivate,
-            Player = new Player(id: uasId, data: CreateInitialPlayerData(userName)),
-            Password = password
-        };
-        var lobby = await LobbyService.Instance.CreateLobbyAsync(lobbyName, maxPlayers, createOptions);
-        StartHeartBeat();
-
-        return lobby;
-    }
-
-    #region HeartBeat
-
-    //Since the LobbyManager maintains the "connection" to the lobby, we will continue to heartbeat until host leaves.
-    async Task SendHeartbeatPingAsync()
-    {
-        if (CurrentLobby == null)
-            return;
-
-        await LobbyService.Instance.SendHeartbeatPingAsync(CurrentLobby.Id);
-    }
-
-    void StartHeartBeat()
-    {
-        heartBeatTask = HeartBeatLoop();
-    }
-
-    async Task HeartBeatLoop()
-    {
-        while (CurrentLobby != null)
-        {
-            await SendHeartbeatPingAsync();
-            await Task.Delay(8000);
-        }
-    }
-
-    #endregion
-
+    //create player data object, used for shared DisplayName property with other player in lobby
     Dictionary<string, PlayerDataObject> CreateInitialPlayerData(string userName)
     {
         Dictionary<string, PlayerDataObject> data = new Dictionary<string, PlayerDataObject>();
@@ -252,6 +70,54 @@ public class LobbyManager : MonoBehaviour
         return data;
     }
 
+    public async void CreateLobby(string userName, int numberOfPlayers = 4)
+    {
+        //generate random lobby name
+        string lobbyName = Path.GetRandomFileName().Replace(".", "").Substring(0, 4);
+
+        string uasId = AuthenticationService.Instance.PlayerId;
+
+
+        CreateLobbyOptions createOptions = new CreateLobbyOptions
+        {
+            IsPrivate = false,
+            Player = new Player(id: uasId, data: CreateInitialPlayerData(userName)),
+        };
+        lobby = await LobbyService.Instance.CreateLobbyAsync(lobbyName, numberOfPlayers, createOptions);
+
+        StartHeartBeat();
+
+        await SubscribeToLobbyEvent();
+        Debug.Log($"Lobby created. Lobby ID {lobby.Id} lobby code {lobby.LobbyCode}");
+    }
+
+    #region HeartBeat
+
+
+    // We need to call the lobby periodically to keep it alive : https://docs.unity.com/ugs/en-us/manual/lobby/manual/heartbeat-a-lobby
+    void StartHeartBeat()
+    {
+        heartBeatTask = HeartBeatLoop();
+    }
+
+    async Task HeartBeatLoop()
+    {
+        while (lobby != null)
+        {
+            await SendHeartbeatPingAsync();
+            await Task.Delay(8000);
+        }
+    }
+
+    async Task SendHeartbeatPingAsync()
+    {
+        if (lobby == null)
+            return;
+
+        await LobbyService.Instance.SendHeartbeatPingAsync(lobby.Id);
+    }
+
+    #endregion
 
     const string key_RelayCode = nameof(LocalLobby.RelayCode);
     const string key_LobbyState = nameof(LocalLobby.LocalLobbyState);
@@ -262,7 +128,7 @@ public class LobbyManager : MonoBehaviour
     const string key_Userstatus = nameof(LocalPlayer.UserStatus);
 
 
-    public async Task BindLocalLobbyToRemote(string lobbyID, LocalLobby localLobby)
+    public async Task SubscribeToLobbyEvent()
     {
         lobbyEventCallbacks.LobbyDeleted += async () =>
         {
@@ -345,7 +211,7 @@ public class LobbyManager : MonoBehaviour
                 //debug player username 
                 var displayName = joinedPlayer.Data["DisplayName"].Value;
                 Debug.Log($"Player {index} joined the lobby with username {displayName}");
-                localLobby.AddPlayer(index, newPlayer);
+                localLobby.AddPlayer(newPlayer);
             }
         };
 
@@ -473,7 +339,79 @@ public class LobbyManager : MonoBehaviour
             Debug.Log("Left Lobby");
             //Dispose();
         };
-        await LobbyService.Instance.SubscribeToLobbyEventsAsync(lobbyID, lobbyEventCallbacks);
+
+        await LobbyService.Instance.SubscribeToLobbyEventsAsync(lobby.Id, lobbyEventCallbacks);
+    }
+
+
+    public void LeaveLobby()
+    {
+        throw new System.NotImplementedException();
+    }
+
+    public void OnGameStarted(UnityAction callback)
+    {
+        throw new System.NotImplementedException();
+    }
+
+    public void OnLobbyJoined(UnityAction callback)
+    {
+        throw new System.NotImplementedException();
+    }
+
+    public void OnLobbyLeft(UnityAction callback)
+    {
+        throw new System.NotImplementedException();
+    }
+
+    public void OnLobbyNameChanged(UnityAction<string> callback)
+    {
+        throw new System.NotImplementedException();
+    }
+
+    public void OnMaxPlayersChanged(UnityAction<int> callback)
+    {
+        throw new System.NotImplementedException();
+    }
+
+    public void OnPlayerNameChanged(UnityAction<string> callback)
+    {
+        throw new System.NotImplementedException();
+    }
+
+    public void OnPlayerReady(UnityAction<bool> callback)
+    {
+        throw new System.NotImplementedException();
+    }
+
+    public void SetLobbyName(string lobbyName)
+    {
+        throw new System.NotImplementedException();
+    }
+
+    public void SetMaxPlayers(int maxPlayers)
+    {
+        throw new System.NotImplementedException();
+    }
+
+    public void SetPlayerName(string playerName)
+    {
+        throw new System.NotImplementedException();
+    }
+
+    public void SetPlayerReady(bool isReady)
+    {
+        throw new System.NotImplementedException();
+    }
+
+    public void StartGame()
+    {
+        throw new System.NotImplementedException();
+    }
+
+    public string GetLobbyCode()
+    {
+        return lobby.LobbyCode;
     }
 
 }
